@@ -7,7 +7,7 @@ using Random = System.Random;
 public static class Noise
 {
     public static float[,] GenerateNoiseMap(int mapWidth, int mapHeight, float scale, int numOfOctaves, float persistance,
-        float lacunarity, int seed)
+        float lacunarity, int seed, Vector2 offset)
     {
         if (scale == 0)
             scale = 0.33f;
@@ -15,7 +15,7 @@ public static class Noise
         Random rnd = new System.Random(seed);
         Vector2[] octaveOffsets = new Vector2[numOfOctaves];
         for (int i = 0; i < numOfOctaves; i++)
-            octaveOffsets[i] = new Vector2(rnd.Next(-100000, 100000), rnd.Next(-100000, 100000));
+            octaveOffsets[i] = new Vector2(rnd.Next(-100000, 100000)+offset.x, rnd.Next(-100000, 100000)+offset.y);
             
         float[,] noiseMap = new float[mapWidth, mapHeight];
         float maxNoiseHeight = float.MinValue;
