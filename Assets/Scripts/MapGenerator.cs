@@ -9,6 +9,9 @@ public class MapGenerator : MonoBehaviour
 {
     /* // If you use 32-mesh this value can be any number up to 65535.
      However, using a larger number is not recommended as it would significantly increase computation without noticeable improvement.*/
+    [SerializeField] private Noise.NormalizeMode _normalizeMode;
+    [SerializeField] private bool useFallof;
+   
     public const int mapChunkSize = 241;
 
     public static readonly int[] LodIncrements = new[] { 1, 2, 4, 6, 8, 10, 12, 16, 20, 24, 30 };
@@ -20,7 +23,7 @@ public class MapGenerator : MonoBehaviour
     [SerializeField] private float persistance;
     [Range(0, 1)] [SerializeField] private float lacunarity;
     [SerializeField] private int seed;
-    [SerializeField] private Vector2  offset;
+    [SerializeField] private Vector2 offset;
 
 
     [SerializeField] private float meshHeightMultiplier;
@@ -29,14 +32,21 @@ public class MapGenerator : MonoBehaviour
     [SerializeField] private TerrainType[] regions;
 
     private ConcurrentQueue<MapThreadInfo<MapData>> _mapDataThreadInfos = new ConcurrentQueue<MapThreadInfo<MapData>>();
-
     private ConcurrentQueue<MapThreadInfo<MeshData>> _meshDataThreadInfos =
         new ConcurrentQueue<MapThreadInfo<MeshData>>();
+
+    private float[,] falloffMap;
+
+    private void Awake()
+    {
+        falloffMap = FalloffGenerator.GenerateFalloffMap(mapChunkSize);
+    }
 
     public enum DrawMode
     {
         NoiseMap,
         ColorMap,
+        Falloff,
         DrawMesh
     }
 
@@ -67,7 +77,7 @@ public class MapGenerator : MonoBehaviour
 
     public void RequestMapData(Vector2 center, Action<MapData> callback)
     {
-        ThreadStart threadStart = delegate { MapDataThread(center,callback); };
+        ThreadStart threadStart = delegate { MapDataThread(center, callback); };
         Thread thread = new Thread(threadStart);
         thread.Start();
     }
@@ -95,21 +105,28 @@ public class MapGenerator : MonoBehaviour
     private MapData GenerateMapdData(Vector2 center)
     {
         float[,] noiseMap =
-            Noise.GenerateNoiseMap(mapChunkSize, mapChunkSize, noiseScale, numOfOctaves, persistance, lacunarity, seed, center+offset);
+            Noise.GenerateNoiseMap(mapChunkSize, mapChunkSize, noiseScale, numOfOctaves, persistance, lacunarity, seed,
+                center + offset, _normalizeMode);
 
         Color[] colorMap = new Color[mapChunkSize * mapChunkSize];
         for (int y = 0; y < mapChunkSize; y++)
         {
             for (int x = 0; x < mapChunkSize; x++)
             {
+                if (useFallof)
+                {
+                    float noiseValue = noiseMap[x, y] - falloffMap[x, y];
+                    noiseMap[x, y] = Mathf.Clamp01(noiseValue);
+                }
                 float currentHeight = noiseMap[x, y];
                 for (int i = 0; i < regions.Length; i++)
                 {
-                    if (currentHeight <= regions[i].height)
+                    if (currentHeight >= regions[i].height)
                     {
                         colorMap[y * mapChunkSize + x] = regions[i].color;
-                        break;
                     }
+                    else
+                        break;
                 }
             }
         }
@@ -132,6 +149,11 @@ public class MapGenerator : MonoBehaviour
             mapDisplay.DrawMesh(
                 MeshGenerator.GenerateTerrainMesh(noiseMap, meshHeightMultiplier, meshHeightCurve, editorLOD),
                 TextureGenerator.TextureFromColorMap(colorMap, mapChunkSize, mapChunkSize));
+        else if (drawMode == DrawMode.Falloff)
+        {
+            mapDisplay.DrawTexture(
+                TextureGenerator.TextureFromHeightMap(FalloffGenerator.GenerateFalloffMap(mapChunkSize)));
+        }
     }
 
     private void OnValidate()
@@ -140,6 +162,7 @@ public class MapGenerator : MonoBehaviour
             lacunarity = 1;
         if (numOfOctaves < 0)
             numOfOctaves = 0;
+        falloffMap = FalloffGenerator.GenerateFalloffMap(mapChunkSize);
     }
 
     struct MapThreadInfo<T>
