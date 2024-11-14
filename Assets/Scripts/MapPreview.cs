@@ -15,6 +15,7 @@ public class MapPreview : MonoBehaviour
     public MeshSettings meshSettings;
     public HeightMapSettings heightMapSettings;
     public TextureData textureData;
+    public PlacementSettings placementSettings;
 
     [SerializeField] private Material terrainMaterial;
     [SerializeField] private Renderer textureRenderer;
@@ -41,12 +42,16 @@ public class MapPreview : MonoBehaviour
             HeightMapGenerator.GenerateHeightMap(meshSettings.numVerticesPerLine, meshSettings.numVerticesPerLine,
                 heightMapSettings, Vector2.zero);
         float[,] noiseMap = heightMap.values;
+        
 
         if (drawMode == DrawMode.NoiseMap)
             DrawTexture(TextureGenerator.TextureFromHeightMap(heightMap));
         else if (drawMode == DrawMode.DrawMesh)
-            DrawMesh(
-                MeshGenerator.GenerateTerrainMesh(noiseMap, meshSettings, editorLOD));
+        {
+            MeshData meshData = MeshGenerator.GenerateTerrainMesh(noiseMap, meshSettings, editorLOD);
+            DrawMesh(meshData);
+            PlacementManager.StartPlacingObjects(placementSettings.placementDatas,meshData,heightMap);
+        }
         else if (drawMode == DrawMode.Falloff)
         {
             DrawTexture(
@@ -54,6 +59,8 @@ public class MapPreview : MonoBehaviour
                     FalloffGenerator.GenerateFalloffMap(meshSettings.numVerticesPerLine,
                         heightMapSettings.falloffCurve), 0, 1)));
         }
+        
+       
     }
 
 

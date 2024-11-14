@@ -1,0 +1,50 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0d6d3c939fc8ec4e9b9cceb4d70c2ac, type: 3}
+  m_Name: Default Placement Settings
+  m_EditorClassIdentifier: 
+  autoUpdate: 1
+  placementDatas:
+  - prefabs:
+    - {fileID: 1285138795044216, guid: e313fe6e24f295d4ab9e95ede445e8a6, type: 3}
+    - {fileID: 1679444589533592, guid: 677564de80aa9a140ade62b2419320f3, type: 3}
+    - {fileID: 1050395432282940, guid: e2500d00d2b8cda42a2a003bee8d1948, type: 3}
+    - {fileID: 1117949595835022, guid: 771b81a2769b0c34daf317bad1079e12, type: 3}
+    - {fileID: 1145341626869510, guid: 098a8982f07e17c4ab67993653e0525c, type: 3}
+    - {fileID: 1928320185293498, guid: 55be475709ca39040a98403b663bbe21, type: 3}
+    - {fileID: 1307593706053120, guid: 5bfb340a041d42b4eab71b21ac54ddc3, type: 3}
+    - {fileID: 1550640983083082, guid: 8c40d75319935a9418781d55d95d2080, type: 3}
+    - {fileID: 1146196242924998, guid: 088347e724bfadb4783e3af1fc3c72fd, type: 3}
+    density: 0.555
+    minHeight: 0.15
+    maxHeight: 0.81
+    minSteepness: 0
+    maxSteepness: 30
+    heightWeight: 0.1
+    noiseWeight: 0.9
+    noiseScale: 0.1
+  - prefabs:
+    - {fileID: 1697875174311778, guid: 1ce7b67a7b64d774c8ae89e38a3adc65, type: 3}
+    - {fileID: 1247875790757426, guid: c672ff059b8269e4b9ba4f6b01aff615, type: 3}
+    - {fileID: 1947973426487622, guid: 863cd2bf677f6a240900ede1535cbd3a, type: 3}
+    - {fileID: 1553564324696662, guid: 004ea573467c4ab4794dd2936363a9b8, type: 3}
+    - {fileID: 1242384693802460, guid: 23d87f68a46ab3d4d975da676bda65dd, type: 3}
+    - {fileID: 1920518017857772, guid: 2e10a75c7f306114992ad877775d42f7, type: 3}
+    - {fileID: 1997880846982194, guid: 9d7339a3fd0e7f94ba7dbb7a004f5ef8, type: 3}
+    density: 1
+    minHeight: 0.15
+    maxHeight: 0.81
+    minSteepness: 0
+    maxSteepness: 10
+    heightWeight: 0.1
+    noiseWeight: 0.9
+    noiseScale: 0.1

@@ -38,6 +38,7 @@ public static class MeshGenerator
         }
 
         meshData.ProcessMesh();
+        meshData.CalculateSteepness();
         return meshData;
     }
 }
@@ -51,15 +52,20 @@ public class MeshData
 
     public int index;
 
+    private float[] steepnessCache;  
+    private int width, height;
     private bool useFlatShading;
 
     public MeshData(int meshWidth, int meshHeight, bool useFlatShading)
     {
         this.useFlatShading = useFlatShading;
-        vertices = new Vector3[meshHeight * meshWidth]; // vertices = height * width;
+        this.width = meshWidth;
+        this.height = meshHeight;
+        vertices = new Vector3[meshWidth * meshHeight];
         uvs = new Vector2[meshWidth * meshHeight];
-        triangles = new int[(meshHeight - 1) * (meshWidth - 1) * 6]; // Each square consist of 6 vertices
+        triangles = new int[(meshWidth - 1) * (meshHeight - 1) * 6];
         normals = new Vector3[meshWidth * meshHeight];
+        steepnessCache = new float[meshWidth * meshHeight];
     }
 
     public void AddTriangle(int a, int b, int c)
@@ -138,5 +144,31 @@ public class MeshData
         else
             mesh.normals = normals; // Set the manually calculated normals.
         return mesh;
+    }
+    public void CalculateSteepness()
+    {
+        for (int z = 1; z < height - 1; z++)
+        {
+            for (int x = 1; x < width - 1; x++)
+            {
+                int index = z * width + x;
+
+                float leftHeight = vertices[index - 1].y;
+                float rightHeight = vertices[index + 1].y;
+                float upHeight = vertices[index - width].y;
+                float downHeight = vertices[index + width].y;
+
+                float dx = rightHeight - leftHeight;
+                float dz = upHeight - downHeight;
+
+                float slope = Mathf.Sqrt(dx * dx + dz * dz);
+                steepnessCache[index] = Mathf.Atan(slope) * Mathf.Rad2Deg;
+            }
+        }
+    }
+    public float GetSteepness(int x, int z)
+    {
+        int index = z * width + x;
+        return steepnessCache[index];
     }
 }
