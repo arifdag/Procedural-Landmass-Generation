@@ -1,78 +1,106 @@
+using System.Collections.Concurrent;
 using UnityEngine;
 using Random = UnityEngine.Random;
 
 public class PlacementManager : MonoBehaviour
 {
-    private static Transform placedObjectsParent;
+    private static readonly ConcurrentQueue<InstantiateRequest> InstantiateQueue = new();
 
-    public static void StartPlacingObjects(PlacementSettings.PlacementData[] placementDatas, MeshData meshData, HeightMap heightMap)
+    public static void StartPlacingObjects(PlacementSettings.PlacementData[] placementDatas, MeshData meshData,
+        HeightMap heightMap, float meshScale, Transform parent, Vector3 worldPosition)
     {
-        // Destroy the previous parent if it exists to clear previously placed objects
-        if (placedObjectsParent != null)
+        foreach (var placementData in placementDatas)
         {
-            DestroyImmediate(placedObjectsParent.gameObject);
-        }
-        
-        placedObjectsParent = new GameObject("Placed Objects").transform;
-
-        for (int i = 0; i < placementDatas.Length; i++)
-        {
-            PlaceObjects(meshData, heightMap, placementDatas[i], placedObjectsParent);
+            PlaceObjects(meshData, heightMap, meshScale, placementData, parent, worldPosition);
         }
     }
 
-    private static void PlaceObjects(MeshData meshData, HeightMap heightMap, PlacementSettings.PlacementData placementData, Transform parent)
+    private static void PlaceObjects(MeshData meshData, HeightMap heightMap, float meshScale,
+        PlacementSettings.PlacementData placementData, Transform parent, Vector3 worldPosition)
     {
-        int chunkSizeX = heightMap.values.GetLength(0);
-        int chunkSizeZ = heightMap.values.GetLength(1);
-
+        int chunkSizeX = meshData._width;
+        int chunkSizeZ = meshData._height;
         int halfSizeX = chunkSizeX / 2;
         int halfSizeZ = chunkSizeZ / 2;
+
+        System.Random threadSafeRandom = new System.Random();
 
         for (int x = 0; x < chunkSizeX; x++)
         {
             for (int z = 0; z < chunkSizeZ; z++)
             {
-                float normalizedHeight = Mathf.InverseLerp(heightMap.minValue, heightMap.maxValue, heightMap.values[x, z]);
+                float normalizedHeight =
+                    Mathf.InverseLerp(heightMap.minValue, heightMap.maxValue, heightMap.values[x, z]*meshScale);
 
                 if (Fitness(meshData, normalizedHeight, placementData, x, z) > 1 - placementData.density)
                 {
-                    Vector3 pos = new Vector3(x - halfSizeX + Random.Range(-0.5f, 0.5f), 0, z - halfSizeZ + Random.Range(-0.5f, 0.5f));
-                    pos.y = heightMap.values[x, z]-1;
+                    float randomXOffset = (float)(threadSafeRandom.NextDouble() - 0.5);
+                    float randomZOffset = (float)(threadSafeRandom.NextDouble() - 0.5);
 
-                    GameObject prefab = placementData.prefabs[Random.Range(0, placementData.prefabs.Length)];
-                    Instantiate(prefab, pos, Quaternion.identity, parent);
+                    Vector3 localPos = new Vector3(
+                        (x - halfSizeX + randomXOffset) * meshScale,
+                        heightMap.values[x, z] * meshScale,
+                        (z - halfSizeZ + randomZOffset) * meshScale
+                    );
+
+                    Vector3 worldPos = localPos + worldPosition;
+                    Vector3 normal = meshData.normals[z * chunkSizeX + x];
+                    Quaternion rotation = Quaternion.FromToRotation(Vector3.up, normal);
+
+                    GameObject prefab = placementData.prefabs[threadSafeRandom.Next(placementData.prefabs.Length)];
+                    
+                    InstantiateQueue.Enqueue(new InstantiateRequest(prefab, worldPos, rotation, parent));
                 }
             }
         }
     }
 
-    private static float Fitness(MeshData meshData, float normalizedHeight, PlacementSettings.PlacementData placementData, int x, int z)
-    {
-        // Base fitness on the height factor, but introduce Perlin noise for randomness
+    private static float Fitness(MeshData meshData, float normalizedHeight,
+        PlacementSettings.PlacementData placementData, int x, int z)
+    {   
         float fitness = normalizedHeight * placementData.heightWeight;
-        if(fitness>1)
-            Debug.Log("1=> " + fitness);
 
-       
         float steepness = meshData.GetSteepness(x, z);
         if (steepness < placementData.minSteepness || steepness > placementData.maxSteepness)
-            fitness -= 0.5f; 
-        
-        
-        if (normalizedHeight < placementData.minHeight || normalizedHeight > placementData.maxHeight)
             fitness -= 0.5f;
-        
-        
+
+        if (normalizedHeight < placementData.minHeight || normalizedHeight > placementData.maxHeight)
+            return 0f;
+
+        int chunkSizeX = meshData._width;
+        Vector3 normal = meshData.normals[z * chunkSizeX + x];
+        float angle = Quaternion.Angle(Quaternion.FromToRotation(Vector3.up, normal), Quaternion.identity);
+
+        if (Mathf.Abs(angle) > 30)
+            fitness -= 0.5f;
+
         float noise = Mathf.PerlinNoise(x * placementData.noiseScale, z * placementData.noiseScale);
         fitness += noise * placementData.noiseWeight;
-        if(fitness>1)
-            Debug.Log("3=> " + fitness);
 
-        // Ensure fitness is clamped between 0 and 1
-        fitness = Mathf.Clamp01(fitness);
+        return Mathf.Clamp01(fitness);
+    }
 
-        return fitness;
+    private void Update()
+    {
+        while (InstantiateQueue.TryDequeue(out var request))
+        {
+            Instantiate(request.Prefab, request.Position, request.Rotation, request.Parent);
+        }
+    }
+
+    private class InstantiateRequest
+    {
+        public GameObject Prefab { get; }
+        public Vector3 Position { get; }
+        public Quaternion Rotation { get; }
+        public Transform Parent { get; }
+
+        public InstantiateRequest(GameObject prefab, Vector3 position, Quaternion rotation, Transform parent)
+        {
+            Prefab = prefab;
+            Position = position;
+            Rotation = rotation;
+            Parent = parent;
+        }
     }
 }
-
