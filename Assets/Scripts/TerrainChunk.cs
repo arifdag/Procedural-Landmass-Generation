@@ -33,7 +33,6 @@ public class TerrainChunk
     private readonly Transform _viewer;
     private readonly float _maxViewDistance;
 
-    
 
     public static object instance;
 
@@ -180,8 +179,8 @@ public class TerrainChunk
             meshData,
             _heightMap,
             _meshSettings.meshScale,
-            _meshGameObject.transform,
-            new Vector3(position.x,0,position.y)
+            _meshGameObject.transform, coordinate,
+            new Vector3(position.x, 0, position.y)
         );
     }
 }
@@ -196,12 +195,12 @@ class LODMesh
     private readonly int _lod;
     public event Action UpdateCallback;
 
-    private TerrainChunk _parentChunk; 
+    private TerrainChunk _parentChunk;
 
     public LODMesh(int lod, TerrainChunk parentChunk)
     {
         this._lod = lod;
-        this._parentChunk = parentChunk; 
+        this._parentChunk = parentChunk;
     }
 
     public void RequestMesh(HeightMap heightMap, MeshSettings meshSettings)
@@ -216,7 +215,7 @@ class LODMesh
         meshData = (MeshData)meshDataObject;
         mesh = meshData.CreateMesh();
         hasMesh = true;
-        _parentChunk.RequestPlacement(meshData); 
+        _parentChunk.RequestPlacement(meshData);
         UpdateCallback?.Invoke();
     }
 }

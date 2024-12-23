@@ -44,16 +44,17 @@ public static class MeshGenerator
 public class MeshData
 {
     public Vector3[] vertices;
-    private readonly int[] _triangles;
+    public readonly int[] triangles;
     public Vector2[] uvs;
     public readonly Vector3[] normals;
 
     private int _index;
-
     private readonly float[] _steepnessCache;
     public readonly int _width;
     public readonly int _height;
     private readonly bool _useFlatShading;
+
+    public Bounds bounds; // Add bounds property
 
     public MeshData(int meshWidth, int meshHeight, bool useFlatShading)
     {
@@ -62,21 +63,24 @@ public class MeshData
         this._height = meshHeight;
         vertices = new Vector3[meshWidth * meshHeight];
         uvs = new Vector2[meshWidth * meshHeight];
-        _triangles = new int[(meshWidth - 1) * (meshHeight - 1) * 6];
+        triangles = new int[(meshWidth - 1) * (meshHeight - 1) * 6];
         normals = new Vector3[meshWidth * meshHeight];
         _steepnessCache = new float[meshWidth * meshHeight];
+        bounds = new Bounds(); // Initialize bounds
     }
 
     public void AddTriangle(int a, int b, int c)
     {
-        _triangles[_index] = a;
-        _triangles[_index + 1] = b;
-        _triangles[_index + 2] = c;
+        triangles[_index] = a;
+        triangles[_index + 1] = b;
+        triangles[_index + 2] = c;
         _index += 3;
     }
 
     public void ProcessMesh()
     {
+        CalculateBounds(); // Calculate bounds after vertices are populated
+
         if (_useFlatShading)
             FlatShading();
         else
@@ -85,30 +89,46 @@ public class MeshData
 
     void FlatShading()
     {
-        Vector3[] flatShadedVertices = new Vector3[_triangles.Length];
-        Vector2[] flatShadedUVs = new Vector2[_triangles.Length];
+        Vector3[] flatShadedVertices = new Vector3[triangles.Length];
+        Vector2[] flatShadedUVs = new Vector2[triangles.Length];
 
-        for (int i = 0; i < _triangles.Length; i++)
+        for (int i = 0; i < triangles.Length; i++)
         {
-            flatShadedVertices[i] = vertices[_triangles[i]];
-            flatShadedUVs[i] = uvs[_triangles[i]];
-            _triangles[i] = i;
+            flatShadedVertices[i] = vertices[triangles[i]];
+            flatShadedUVs[i] = uvs[triangles[i]];
+            triangles[i] = i;
         }
 
         vertices = flatShadedVertices;
         uvs = flatShadedUVs;
     }
 
+    private void CalculateBounds()
+    {
+        if (vertices.Length == 0) return;
+
+        Vector3 min = vertices[0];
+        Vector3 max = vertices[0];
+
+        for (int i = 1; i < vertices.Length; i++)
+        {
+            min = Vector3.Min(min, vertices[i]);
+            max = Vector3.Max(max, vertices[i]);
+        }
+
+        bounds.SetMinMax(min, max);
+    }
+
     // Calculate normals manually for threading
     private void CalculateNormals()
     {
-        Vector3[] triangleNormals = new Vector3[_triangles.Length / 3];
+        Vector3[] triangleNormals = new Vector3[triangles.Length / 3];
 
-        for (int i = 0; i < _triangles.Length; i += 3)
+        for (int i = 0; i < triangles.Length; i += 3)
         {
-            int vertexIndexA = _triangles[i];
-            int vertexIndexB = _triangles[i + 1];
-            int vertexIndexC = _triangles[i + 2];
+            int vertexIndexA = triangles[i];
+            int vertexIndexB = triangles[i + 1];
+            int vertexIndexC = triangles[i + 2];
 
             Vector3 pointA = vertices[vertexIndexA];
             Vector3 pointB = vertices[vertexIndexB];
@@ -131,19 +151,21 @@ public class MeshData
         }
     }
 
-
     public Mesh CreateMesh()
     {
         Mesh mesh = new Mesh
         {
             vertices = vertices,
-            triangles = _triangles,
-            uv = uvs
+            triangles = triangles,
+            uv = uvs,
+            bounds = bounds // Set bounds for the mesh
         };
+
         if (_useFlatShading)
             mesh.RecalculateNormals();
         else
             mesh.normals = normals; // Set the manually calculated normals.
+
         return mesh;
     }
 
@@ -171,7 +193,7 @@ public class MeshData
 
     public float GetSteepness(int x, int z)
     {
-        int index = z  * _width + x;
+        int index = z * _width + x;
         return _steepnessCache[index];
     }
 }

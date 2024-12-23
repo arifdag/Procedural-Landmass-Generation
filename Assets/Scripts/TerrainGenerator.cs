@@ -26,9 +26,11 @@ public class TerrainGenerator : MonoBehaviour
 
     private readonly Dictionary<Vector2, TerrainChunk> _terrainChunks = new Dictionary<Vector2, TerrainChunk>();
     private readonly List<TerrainChunk> _visibleTerrainChunks = new List<TerrainChunk>();
-
+    
+    
     [SerializeField] private Material mapMaterial;
-
+    
+    private GPUInstancing _gpuInstancing;
     private void Start()
     {
         textureSettings.ApplyToMaterial(mapMaterial);
@@ -38,6 +40,8 @@ public class TerrainGenerator : MonoBehaviour
         _meshWorldSize = meshSettings.MeshWorldSize;
         _chunkVisibleInViewDistance = Mathf.RoundToInt(maxViewDistance / _meshWorldSize);
 
+        _gpuInstancing = FindObjectOfType<GPUInstancing>();
+        
         UpdateVisibleChunks();
     }
 
@@ -90,6 +94,7 @@ public class TerrainGenerator : MonoBehaviour
                             detailLevels, colliderLODIndex, transform, viewTransform, mapMaterial);
                         _terrainChunks.Add(viewedChunkCord, newChunk);
                         newChunk.OnVisibilityChanged += OnTerrainChunkVisibilityChanged;
+                        newChunk.OnVisibilityChanged += _gpuInstancing.OnTerrainChunkVisibilityChanged;
                         newChunk.Load();
                     }
                 }

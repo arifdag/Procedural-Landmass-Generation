@@ -30,7 +30,7 @@ public class ThreadedDataRequester : MonoBehaviour
     {
         void ThreadStart()
         {
-            requestThread();
+            requestThread?.Invoke();
             _instance._dataQueue.Enqueue(new ThreadInfo(() => callback(), null));
         }
 
