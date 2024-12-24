@@ -7,13 +7,14 @@ using Random = UnityEngine.Random;
 public class PlacementManager : MonoBehaviour
 {
     private static readonly ConcurrentQueue<InstantiateRequest> InstantiateQueue = new();
-
-    private static readonly ConcurrentDictionary<PlacementSettings.PlacementData, (List<GameObject>, int)> ObjectPools =
-        new();
-
-    private static readonly ConcurrentQueue<PlacementSettings.PlacementData> DictonaryQueue = new();
     private static ConcurrentQueue<InstantiateRequest> GPUBatch = new();
     private static GPUInstancing gpuInstancing;
+    
+    // Object pools for each prefab type
+    private static readonly ConcurrentDictionary<GameObject, ConcurrentBag<GameObject>> ObjectPools = new();
+    // Track active objects per chunk
+    private static readonly ConcurrentDictionary<Vector2, HashSet<GameObject>> ActiveObjectsByChunk = new();
+    private static readonly object poolLock = new object();
 
     private void Start()
     {
@@ -23,11 +24,54 @@ public class PlacementManager : MonoBehaviour
     public static void StartPlacingObjects(PlacementSettings.PlacementData[] placementDatas, MeshData meshData,
         HeightMap heightMap, float meshScale, Transform parent, Vector2 chunkCoord, Vector3 worldPosition)
     {
+        // Deactivate previous objects in this chunk if they exist
+        if (ActiveObjectsByChunk.TryGetValue(chunkCoord, out var activeObjects))
+        {
+            foreach (var obj in activeObjects)
+            {
+                ReturnToPool(obj);
+            }
+            activeObjects.Clear();
+        }
+
         foreach (var placementData in placementDatas)
         {
-            DictonaryQueue.Enqueue(placementData);
             PlaceObjects(meshData, heightMap, meshScale, placementData, parent, chunkCoord, worldPosition);
         }
+    }
+
+    private static void ReturnToPool(GameObject obj)
+    {
+        if (obj == null) return;
+        
+        obj.SetActive(false);
+        var prefab = obj.GetComponent<PooledObject>()?.Prefab;
+        if (prefab != null && ObjectPools.TryGetValue(prefab, out var pool))
+        {
+            pool.Add(obj);
+        }
+    }
+
+    private static GameObject GetFromPool(GameObject prefab, Transform parent)
+    {
+        if (!ObjectPools.TryGetValue(prefab, out var pool))
+        {
+            lock (poolLock)
+            {
+                pool = ObjectPools.GetOrAdd(prefab, new ConcurrentBag<GameObject>());
+            }
+        }
+
+        if (pool.TryTake(out var obj))
+        {
+            obj.SetActive(true);
+            return obj;
+        }
+
+        obj = Instantiate(prefab, parent);
+        var pooledObj = obj.AddComponent<PooledObject>();
+        pooledObj.Prefab = prefab;
+        return obj;
     }
 
     private static void PlaceObjects(MeshData meshData, HeightMap heightMap, float meshScale,
@@ -74,7 +118,7 @@ public class PlacementManager : MonoBehaviour
                     }
 
                     GameObject prefab = placementData.prefabs[threadSafeRandom.Next(placementData.prefabs.Length)];
-                    InstantiateQueue.Enqueue(new InstantiateRequest(placementData, prefab, worldPos, rotation, parent));
+                    InstantiateQueue.Enqueue(new InstantiateRequest(prefab, worldPos, rotation, parent, chunkCoord));
                 }
             }
         }
@@ -111,7 +155,6 @@ public class PlacementManager : MonoBehaviour
         return Mathf.Clamp01(fitness);
     }
 
-
     readonly List<InstantiateRequest> _batch = new List<InstantiateRequest>();
 
     private void Update()
@@ -126,44 +169,26 @@ public class PlacementManager : MonoBehaviour
             }
         }
 
-        while (DictonaryQueue.TryDequeue(out var placementData))
-        {
-            SetDictionary(placementData);
-        }
-
         if (_batch.Count > 0)
             InstantiateBatch(_batch);
     }
 
-    void SetDictionary(PlacementSettings.PlacementData placementData)
-    {
-        if (!ObjectPools.ContainsKey(placementData))
-        {
-            ObjectPools[placementData] = (new List<GameObject>(), 0);
-        }
-        else
-        {
-            ObjectPools[placementData] = (ObjectPools[placementData].Item1, 0);
-        }
-    }
-
     public class InstantiateRequest
     {
-        public PlacementSettings.PlacementData PlacementData;
         public GameObject Prefab { get; }
         public Vector3 Position { get; }
         public Quaternion Rotation { get; }
         public int Scale { get; }
         public Transform Parent { get; }
+        public Vector2 ChunkCoord { get; }
 
-        public InstantiateRequest(PlacementSettings.PlacementData placementData, GameObject prefab, Vector3 position,
-            Quaternion rotation, Transform parent)
+        public InstantiateRequest(GameObject prefab, Vector3 position, Quaternion rotation, Transform parent, Vector2 chunkCoord)
         {
-            PlacementData = placementData;
             Prefab = prefab;
             Position = position;
             Rotation = rotation;
             Parent = parent;
+            ChunkCoord = chunkCoord;
         }
 
         public InstantiateRequest(Vector3 position, Quaternion rotation, int scale)
@@ -174,43 +199,32 @@ public class PlacementManager : MonoBehaviour
         }
     }
 
+    private class PooledObject : MonoBehaviour
+    {
+        public GameObject Prefab { get; set; }
+    }
+
     private void InstantiateBatch(List<InstantiateRequest> batch)
     {
-        List<GameObject> pool;
-        int poolIndex;
         GameObject gameObject;
         foreach (var request in batch)
         {
-            if(!ObjectPools.ContainsKey(request.PlacementData))
-                continue;
-            var objectPoolData = ObjectPools[request.PlacementData];
-            pool = objectPoolData.Item1;
-            poolIndex = objectPoolData.Item2;
-            if (poolIndex < pool.Count)
-            {
-                GameObject obj = pool[poolIndex];
-                obj.transform.position = request.Position;
-                obj.transform.rotation = request.Rotation;
-                obj.SetActive(true);
-            }
-            else
-            {
-                gameObject = Instantiate(request.Prefab, request.Position, request.Rotation, request.Parent);
-                gameObject.transform.localScale = new Vector3(1.25f, 1.25f, 1.25f);
-                pool.Add(gameObject);
-            }
+            gameObject = GetFromPool(request.Prefab, request.Parent);
+            gameObject.transform.position = request.Position;
+            gameObject.transform.rotation = request.Rotation;
+            gameObject.transform.localScale = new Vector3(1.25f, 1.25f, 1.25f);
 
-            poolIndex++;
-            ObjectPools[request.PlacementData] = (pool, poolIndex);
-        }
-
-        foreach (var entry in ObjectPools)
-        {
-            pool = entry.Value.Item1;
-            poolIndex = entry.Value.Item2;
-            for (int i = poolIndex; i < pool.Count; i++)
+            if (!ActiveObjectsByChunk.TryGetValue(request.ChunkCoord, out var activeObjects))
             {
-                pool[i].SetActive(false);
+                lock (poolLock)
+                {
+                    activeObjects = ActiveObjectsByChunk.GetOrAdd(request.ChunkCoord, new HashSet<GameObject>());
+                }
+            }
+            
+            lock (activeObjects)
+            {
+                activeObjects.Add(gameObject);
             }
         }
     }
