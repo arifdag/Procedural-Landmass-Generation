@@ -118,9 +118,11 @@ public class TerrainChunk
 
                 if (lodIndex != _previousLODIndex)
                 {
+                    
                     LODMesh lodMesh = _lodMeshes[lodIndex];
                     if (lodMesh.hasMesh)
                     {
+                        RequestPlacement(_lodMeshes[lodIndex].meshData);
                         _previousLODIndex = lodIndex;
                         _meshFilter.mesh = lodMesh.mesh;
                     }

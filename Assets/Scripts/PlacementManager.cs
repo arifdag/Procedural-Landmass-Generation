@@ -7,6 +7,7 @@ using Random = UnityEngine.Random;
 public class PlacementManager : MonoBehaviour
 {
     private static readonly ConcurrentQueue<InstantiateRequest> InstantiateQueue = new();
+    private static readonly ConcurrentQueue<GameObject> ReturnToPoolQueue = new();
     private static ConcurrentQueue<InstantiateRequest> GPUBatch = new();
     private static GPUInstancing gpuInstancing;
     
@@ -24,12 +25,12 @@ public class PlacementManager : MonoBehaviour
     public static void StartPlacingObjects(PlacementSettings.PlacementData[] placementDatas, MeshData meshData,
         HeightMap heightMap, float meshScale, Transform parent, Vector2 chunkCoord, Vector3 worldPosition)
     {
-        // Deactivate previous objects in this chunk if they exist
+        // Queue previous objects in this chunk for deactivation if they exist
         if (ActiveObjectsByChunk.TryGetValue(chunkCoord, out var activeObjects))
         {
             foreach (var obj in activeObjects)
             {
-                ReturnToPool(obj);
+                ReturnToPoolQueue.Enqueue(obj);
             }
             activeObjects.Clear();
         }
@@ -81,7 +82,7 @@ public class PlacementManager : MonoBehaviour
         int chunkSizeZ = meshData._height;
         int halfSizeX = chunkSizeX / 2;
         int halfSizeZ = chunkSizeZ / 2;
-
+        
         System.Random threadSafeRandom = new System.Random();
 
         for (int x = 0; x < chunkSizeX; x++)
@@ -159,6 +160,13 @@ public class PlacementManager : MonoBehaviour
 
     private void Update()
     {
+        // Handle object returns on main thread
+        while (ReturnToPoolQueue.TryDequeue(out var obj))
+        {
+            ReturnToPool(obj);
+        }
+
+        // Handle instantiation requests
         while (InstantiateQueue.TryDequeue(out var request))
         {
             _batch.Add(request);
