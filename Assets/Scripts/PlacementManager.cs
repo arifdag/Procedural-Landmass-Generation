@@ -10,9 +10,10 @@ public class PlacementManager : MonoBehaviour
     private static readonly ConcurrentQueue<GameObject> ReturnToPoolQueue = new();
     private static ConcurrentQueue<InstantiateRequest> GPUBatch = new();
     private static GPUInstancing gpuInstancing;
-    
+
     // Object pools for each prefab type
     private static readonly ConcurrentDictionary<GameObject, ConcurrentBag<GameObject>> ObjectPools = new();
+
     // Track active objects per chunk
     private static readonly ConcurrentDictionary<Vector2, HashSet<GameObject>> ActiveObjectsByChunk = new();
     private static readonly object poolLock = new object();
@@ -32,6 +33,7 @@ public class PlacementManager : MonoBehaviour
             {
                 ReturnToPoolQueue.Enqueue(obj);
             }
+
             activeObjects.Clear();
         }
 
@@ -44,7 +46,7 @@ public class PlacementManager : MonoBehaviour
     private static void ReturnToPool(GameObject obj)
     {
         if (obj == null) return;
-        
+
         obj.SetActive(false);
         var prefab = obj.GetComponent<PooledObject>()?.Prefab;
         if (prefab != null && ObjectPools.TryGetValue(prefab, out var pool))
@@ -82,7 +84,7 @@ public class PlacementManager : MonoBehaviour
         int chunkSizeZ = meshData._height;
         int halfSizeX = chunkSizeX / 2;
         int halfSizeZ = chunkSizeZ / 2;
-        
+
         System.Random threadSafeRandom = new System.Random();
 
         for (int x = 0; x < chunkSizeX; x++)
@@ -99,26 +101,35 @@ public class PlacementManager : MonoBehaviour
 
                 if (Fitness(meshData, normalizedHeight, placementData, x, z) > 1 - placementData.density)
                 {
-                    float randomXOffset = (float)(threadSafeRandom.NextDouble() - 0.5);
-                    float randomZOffset = (float)(threadSafeRandom.NextDouble() - 0.5);
+                    // Calculate base position with smaller random offset
+                    float randomXOffset = (float)(threadSafeRandom.NextDouble() - 0.5) * 0.5f;
+                    float randomZOffset = (float)(threadSafeRandom.NextDouble() - 0.5) * 0.5f;
 
-                    Vector3 localPos = new Vector3(
-                        (x - halfSizeX + randomXOffset) * meshScale,
-                        heightMap.values[x, z] * meshScale,
-                        (z - halfSizeZ + randomZOffset) * meshScale
-                    );
+                    // Get the vertex index for this position
+                    int vertexIndex = z * chunkSizeX + x;
+                    Vector3 vertexPosition = meshData.vertices[vertexIndex];
+                    Vector3 normal = meshData.normals[vertexIndex];
 
-                    Vector3 worldPos = localPos + worldPosition;
-                    Vector3 normal = meshData.normals[z * chunkSizeX + x];
-                    Quaternion rotation = Quaternion.FromToRotation(Vector3.up, normal);
+                    // Calculate world position
+                    Vector3 worldPos = vertexPosition + worldPosition;
+
+                    // Add small random offset in the direction of the normal
+                    float randomOffset = (float)(threadSafeRandom.NextDouble() - 0.5) * 0.2f;
+                    worldPos += normal * randomOffset;
 
                     if (placementData.GPUInstancing)
                     {
-                        GPUBatch.Enqueue(new InstantiateRequest(worldPos, rotation, placementData.scale));
+                        // For GPU instancing, we'll use the normal to adjust the position
+                        float offset = 0.5f;
+                        worldPos += normal * offset;
+                        Quaternion rt = Quaternion.FromToRotation(Vector3.up, normal);
+                        GPUBatch.Enqueue(new InstantiateRequest(worldPos, rt, placementData.scale));
                         continue;
                     }
 
+                    // For regular objects, we'll use the calculated position and normal
                     GameObject prefab = placementData.prefabs[threadSafeRandom.Next(placementData.prefabs.Length)];
+                    Quaternion rotation = Quaternion.FromToRotation(Vector3.up, normal);
                     InstantiateQueue.Enqueue(new InstantiateRequest(prefab, worldPos, rotation, parent, chunkCoord));
                 }
             }
@@ -190,7 +201,8 @@ public class PlacementManager : MonoBehaviour
         public Transform Parent { get; }
         public Vector2 ChunkCoord { get; }
 
-        public InstantiateRequest(GameObject prefab, Vector3 position, Quaternion rotation, Transform parent, Vector2 chunkCoord)
+        public InstantiateRequest(GameObject prefab, Vector3 position, Quaternion rotation, Transform parent,
+            Vector2 chunkCoord)
         {
             Prefab = prefab;
             Position = position;
@@ -229,7 +241,7 @@ public class PlacementManager : MonoBehaviour
                     activeObjects = ActiveObjectsByChunk.GetOrAdd(request.ChunkCoord, new HashSet<GameObject>());
                 }
             }
-            
+
             lock (activeObjects)
             {
                 activeObjects.Add(gameObject);
