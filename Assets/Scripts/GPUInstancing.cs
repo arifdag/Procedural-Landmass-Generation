@@ -39,7 +39,7 @@ public class GPUInstancing : MonoBehaviour
                 if (batches.Count == 0)
                     batches.Add(new List<Matrix4x4>());
 
-                batches[^1].Add(GetMatrix4X4(request.Position, request.Rotation, Vector3.one * 50));
+                batches[^1].Add(GetMatrix4X4(request.Position, request.Rotation, Vector3.one * request.Scale));
                 addedMatricies++;
             }
             else

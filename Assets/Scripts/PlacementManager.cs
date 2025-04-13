@@ -87,9 +87,13 @@ public class PlacementManager : MonoBehaviour
 
         System.Random threadSafeRandom = new System.Random();
 
-        for (int x = 0; x < chunkSizeX; x++)
+        // For grass (GPU instanced objects), we want higher density
+        int stepSize = 1; 
+        float densityMultiplier = placementData.GPUInstancing ? 3.0f : 1.0f; 
+        
+        for (int x = 0; x < chunkSizeX; x += stepSize)
         {
-            for (int z = 0; z < chunkSizeZ; z++)
+            for (int z = 0; z < chunkSizeZ; z += stepSize)
             {
                 if (x < 0 || x >= heightMap.values.GetLength(0) || z < 0 || z >= heightMap.values.GetLength(1))
                 {
@@ -99,9 +103,11 @@ public class PlacementManager : MonoBehaviour
                 float normalizedHeight =
                     Mathf.InverseLerp(heightMap.minValue, heightMap.maxValue, heightMap.values[x, z] * meshScale);
 
-                if (Fitness(meshData, normalizedHeight, placementData, x, z) > 1 - placementData.density)
+                // Threshold check - lower threshold means more objects will be placed
+                float adjustedDensity = Mathf.Min(placementData.density * densityMultiplier, 0.95f);
+                if (Fitness(meshData, normalizedHeight, placementData, x, z) > 1 - adjustedDensity)
                 {
-                    // Calculate base position with smaller random offset
+                    // Calculate base position with small random offset
                     float randomXOffset = (float)(threadSafeRandom.NextDouble() - 0.5) * 0.5f;
                     float randomZOffset = (float)(threadSafeRandom.NextDouble() - 0.5) * 0.5f;
 
@@ -119,11 +125,24 @@ public class PlacementManager : MonoBehaviour
 
                     if (placementData.GPUInstancing)
                     {
-                        // For GPU instancing, we'll use the normal to adjust the position
-                        float offset = 0.5f;
+                        // For GPU instancing, add random offsets to break symmetry
+                        randomXOffset = (float)(threadSafeRandom.NextDouble() - 0.5f)*0.8f;
+                        randomZOffset = (float)(threadSafeRandom.NextDouble() - 0.5f)*0.8f;
+                        worldPos += new Vector3(randomXOffset, 0, randomZOffset);
+                        
+                        // Small height offset for ground contact
+                        float offset = 0.05f;
                         worldPos += normal * offset;
-                        Quaternion rt = Quaternion.FromToRotation(Vector3.up, normal);
-                        GPUBatch.Enqueue(new InstantiateRequest(worldPos, rt, placementData.scale));
+                        
+                        // Add slight random rotation variation
+                        Quaternion randomRotOffset = Quaternion.Euler(0, (float)threadSafeRandom.NextDouble() * 360f, 0);
+                        Quaternion rt = Quaternion.FromToRotation(Vector3.up, normal) * randomRotOffset;
+                        
+                        // Random scale variation
+                        float scaleVariation = 0.8f + (float)threadSafeRandom.NextDouble() * 0.4f; // 0.8 to 1.2 range
+                        int randomizedScale = Mathf.RoundToInt(placementData.scale * scaleVariation);
+                        
+                        GPUBatch.Enqueue(new InstantiateRequest(worldPos, rt, randomizedScale));
                         continue;
                     }
 
