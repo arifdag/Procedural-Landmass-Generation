@@ -6,6 +6,10 @@ using Random = UnityEngine.Random;
 
 public class PlacementManager : MonoBehaviour
 {
+    [SerializeField] private LayerMask placementMask;
+    private static LayerMask staticPlacementMask;
+    private const float CHECK_RADIUS = 10f;
+    
     private static readonly ConcurrentQueue<InstantiateRequest> InstantiateQueue = new();
     private static readonly ConcurrentQueue<GameObject> ReturnToPoolQueue = new();
     private static ConcurrentQueue<InstantiateRequest> GPUBatch = new();
@@ -21,6 +25,7 @@ public class PlacementManager : MonoBehaviour
     private void Start()
     {
         gpuInstancing = FindObjectOfType<GPUInstancing>();
+        staticPlacementMask = placementMask;
     }
 
     public static void StartPlacingObjects(PlacementSettings.PlacementData[] placementDatas, MeshData meshData,
@@ -88,9 +93,9 @@ public class PlacementManager : MonoBehaviour
         System.Random threadSafeRandom = new System.Random();
 
         // For grass (GPU instanced objects), we want higher density
-        int stepSize = 1; 
-        float densityMultiplier = placementData.GPUInstancing ? 3.0f : 1.0f; 
-        
+        int stepSize = 1;
+        float densityMultiplier = placementData.GPUInstancing ? 3.0f : 1.0f;
+
         for (int x = 0; x < chunkSizeX; x += stepSize)
         {
             for (int z = 0; z < chunkSizeZ; z += stepSize)
@@ -123,33 +128,42 @@ public class PlacementManager : MonoBehaviour
                     float randomOffset = (float)(threadSafeRandom.NextDouble() - 0.5) * 0.2f;
                     worldPos += normal * randomOffset;
 
+                    int randomizedScale;
                     if (placementData.GPUInstancing)
                     {
                         // For GPU instancing, add random offsets to break symmetry
-                        randomXOffset = (float)(threadSafeRandom.NextDouble() - 0.5f)*0.8f;
-                        randomZOffset = (float)(threadSafeRandom.NextDouble() - 0.5f)*0.8f;
+                        randomXOffset = (float)(threadSafeRandom.NextDouble() - 0.5f) * 0.8f;
+                        randomZOffset = (float)(threadSafeRandom.NextDouble() - 0.5f) * 0.8f;
                         worldPos += new Vector3(randomXOffset, 0, randomZOffset);
-                        
+
                         // Small height offset for ground contact
                         float offset = 0.05f;
                         worldPos += normal * offset;
-                        
+
                         // Add slight random rotation variation
-                        Quaternion randomRotOffset = Quaternion.Euler(0, (float)threadSafeRandom.NextDouble() * 360f, 0);
+                        Quaternion randomRotOffset =
+                            Quaternion.Euler(0, (float)threadSafeRandom.NextDouble() * 360f, 0);
                         Quaternion rt = Quaternion.FromToRotation(Vector3.up, normal) * randomRotOffset;
-                        
+
                         // Random scale variation
-                        float scaleVariation = 0.8f + (float)threadSafeRandom.NextDouble() * 0.4f; // 0.8 to 1.2 range
-                        int randomizedScale = Mathf.RoundToInt(placementData.scale * scaleVariation);
-                        
+                        float scaleVariation =
+                            0.8f + (float)threadSafeRandom.NextDouble() * 0.4f; // 0.8 to 1.2 range
+                        randomizedScale = placementData.useRandomScale
+                            ? threadSafeRandom.Next(placementData.minScale, placementData.maxScale + 1)
+                            : placementData.scale;
+
                         GPUBatch.Enqueue(new InstantiateRequest(worldPos, rt, randomizedScale));
                         continue;
                     }
 
                     // For regular objects, we'll use the calculated position and normal
+                    randomizedScale = placementData.useRandomScale
+                        ? threadSafeRandom.Next(placementData.minScale, placementData.maxScale + 1)
+                        : placementData.scale;
                     GameObject prefab = placementData.prefabs[threadSafeRandom.Next(placementData.prefabs.Length)];
                     Quaternion rotation = Quaternion.FromToRotation(Vector3.up, normal);
-                    InstantiateQueue.Enqueue(new InstantiateRequest(prefab, worldPos, rotation, parent, chunkCoord));
+                    InstantiateQueue.Enqueue(new InstantiateRequest(prefab, worldPos, rotation, parent,
+                        chunkCoord, randomizedScale));
                 }
             }
         }
@@ -220,21 +234,25 @@ public class PlacementManager : MonoBehaviour
         public Transform Parent { get; }
         public Vector2 ChunkCoord { get; }
 
-        public InstantiateRequest(GameObject prefab, Vector3 position, Quaternion rotation, Transform parent,
-            Vector2 chunkCoord)
+        public InstantiateRequest(GameObject prefab, Vector3 position, Quaternion rotation,
+            Transform parent, Vector2 chunkCoord, int scale)
         {
             Prefab = prefab;
             Position = position;
             Rotation = rotation;
             Parent = parent;
             ChunkCoord = chunkCoord;
+            Scale = scale;
         }
 
         public InstantiateRequest(Vector3 position, Quaternion rotation, int scale)
         {
+            Prefab = null;
             Position = position;
             Rotation = rotation;
             Scale = scale;
+            Parent = null;
+            ChunkCoord = Vector2.zero;
         }
     }
 
@@ -251,7 +269,7 @@ public class PlacementManager : MonoBehaviour
             gameObject = GetFromPool(request.Prefab, request.Parent);
             gameObject.transform.position = request.Position;
             gameObject.transform.rotation = request.Rotation;
-            gameObject.transform.localScale = new Vector3(1.25f, 1.25f, 1.25f);
+            gameObject.transform.localScale = Vector3.one * request.Scale;
 
             if (!ActiveObjectsByChunk.TryGetValue(request.ChunkCoord, out var activeObjects))
             {
