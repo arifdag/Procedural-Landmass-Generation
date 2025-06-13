@@ -1,0 +1,114 @@
+#pragma kernel WorleyFBMKernel // Renamed kernel
+
+// Input parameters
+int _Resolution;        // Resolution of the 3D texture
+int3 _BaseCellCount;    // Number of Worley cells for the base frequency (octave 0)
+int _Octaves;           // Number of FBM octaves
+float _Lacunarity;      // Frequency multiplier per octave
+float _Persistence;     // Amplitude multiplier per octave
+
+// Buffer containing pre-calculated random feature points for each cell of the base grid
+StructuredBuffer<float3> _FeaturePointsBuffer;
+
+// Output 3D texture (now RGBA)
+RWTexture3D<float4> _ResultTexture;
+
+// Worley F1 Noise function
+// Calculates F1 Worley noise (distance to closest point) for a given sample point.
+// - sample_p: The 3D coordinate to sample noise at. Can be outside [0,1] due to FBM frequency scaling.
+// - cell_count_for_points: The density of feature points in the _FeaturePointsBuffer.
+// - pointsBuffer: The buffer of feature point offsets.
+float CalculateWorleyF1(float3 sample_p, int3 cell_count_for_points, StructuredBuffer<float3> pointsBuffer)
+{
+    // Determine which cell this point is in, relative to the density of points in pointsBuffer.
+    // sample_p is effectively in a coordinate system that has been tiled/scaled by FBM frequency.
+    // The feature points in pointsBuffer define a grid based on cell_count_for_points.
+    // We use cell_count_for_points to determine how sample_p maps to this grid.
+    int3 current_cell_scaled = int3(floor(sample_p * cell_count_for_points));
+
+    float min_dist_sq_f1 = 1000000.0;
+
+    // Iterate over the current cell and its 26 neighbors
+    for (int z_offset = -1; z_offset <= 1; ++z_offset) {
+        for (int y_offset = -1; y_offset <= 1; ++y_offset) {
+            for (int x_offset = -1; x_offset <= 1; ++x_offset) {
+                // This is the absolute cell index in the (potentially large) conceptual grid
+                // defined by sample_p * cell_count_for_points
+                int3 neighbor_cell_absolute = current_cell_scaled + int3(x_offset, y_offset, z_offset);
+
+                // Wrap neighbor_cell_absolute to get an index into the _FeaturePointsBuffer,
+                // which has dimensions defined by cell_count_for_points. This creates tiling.
+                int3 wrapped_cell_for_buffer_lookup;
+                wrapped_cell_for_buffer_lookup.x = (neighbor_cell_absolute.x % cell_count_for_points.x + cell_count_for_points.x) % cell_count_for_points.x;
+                wrapped_cell_for_buffer_lookup.y = (neighbor_cell_absolute.y % cell_count_for_points.y + cell_count_for_points.y) % cell_count_for_points.y;
+                wrapped_cell_for_buffer_lookup.z = (neighbor_cell_absolute.z % cell_count_for_points.z + cell_count_for_points.z) % cell_count_for_points.z;
+
+                int pointIndex = wrapped_cell_for_buffer_lookup.x +
+                                 wrapped_cell_for_buffer_lookup.y * cell_count_for_points.x +
+                                 wrapped_cell_for_buffer_lookup.z * cell_count_for_points.x * cell_count_for_points.y;
+
+                // Get the feature point (random offset within its cell, [0,1])
+                float3 featurePointOffset = pointsBuffer[pointIndex];
+
+                // Calculate the actual "world" position of this feature point.
+                // It's at (integer_cell_position + offset_in_cell) / density_of_cells.
+                // This position is in the same coordinate space as sample_p.
+                float3 featurePointPos = (float3(neighbor_cell_absolute) + featurePointOffset) / float3(cell_count_for_points);
+
+                // Calculate squared Euclidean distance
+                float3 diff = sample_p - featurePointPos;
+                float dist_sq = dot(diff, diff);
+
+                if (dist_sq < min_dist_sq_f1) {
+                    min_dist_sq_f1 = dist_sq;
+                }
+            }
+        }
+    }
+    return sqrt(min_dist_sq_f1);
+}
+
+
+[numthreads(8,8,8)]
+void WorleyFBMKernel (uint3 id : SV_DispatchThreadID)
+{
+    if (id.x >= _Resolution || id.y >= _Resolution || id.z >= _Resolution) {
+        return;
+    }
+
+    // Normalized coordinates of the current voxel in the output texture [0,1]
+    float3 p_tex = float3(id) / (float)_Resolution;
+
+    float totalWorleyValue = 0.0;
+    float frequency = 1.0;
+    float amplitude = 1.0;
+    float maxAmplitudeSum = 0.0; // Used for normalization
+
+    for (int i = 0; i < _Octaves; i++) {
+        // Scale the texture coordinate by the current frequency
+        float3 sample_p = p_tex * frequency;
+
+        // Calculate Worley F1 noise for this octave
+        // _BaseCellCount defines the density of points in _FeaturePointsBuffer
+        float worleyF1 = CalculateWorleyF1(sample_p, _BaseCellCount, _FeaturePointsBuffer);
+
+        totalWorleyValue += worleyF1 * amplitude;
+        maxAmplitudeSum += amplitude;
+
+        // Modify frequency and amplitude for the next octave
+        frequency *= _Lacunarity;
+        amplitude *= _Persistence;
+    }
+
+    // Normalize the summed value
+    float finalNoiseValue = 0.0;
+    if (maxAmplitudeSum > 0.0001) { // Avoid division by zero if octaves is 0 or persistence is too low
+        finalNoiseValue = totalWorleyValue / maxAmplitudeSum;
+    }
+
+    // Optional: Invert for common cloud appearance (darker means denser)
+    // finalNoiseValue = 1.0 - finalNoiseValue;
+
+    // Store the grayscale FBM result in R, G, and B channels. Alpha is 1.
+    _ResultTexture[id] = float4(finalNoiseValue, finalNoiseValue, finalNoiseValue, 1.0);
+}

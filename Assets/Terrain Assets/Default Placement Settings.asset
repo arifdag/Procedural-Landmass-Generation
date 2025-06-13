@@ -1,0 +1,82 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: c0d6d3c939fc8ec4e9b9cceb4d70c2ac, type: 3}
+  m_Name: Default Placement Settings
+  m_EditorClassIdentifier: 
+  autoUpdate: 1
+  placementDatas:
+  - GPUInstancing: 0
+    prefabs:
+    - {fileID: 1017998235383952, guid: abff4394a0b52c94d9f3b18eb65e3241, type: 3}
+    - {fileID: 1686235821942190, guid: 37ab3700ae24348488949cf10beb5215, type: 3}
+    mesh: {fileID: 0}
+    materials:
+    - {fileID: 2100000, guid: c879a0d08f45b1e459546431123c8403, type: 2}
+    useRandomScale: 1
+    scale: 13
+    minScale: 0
+    maxScale: 0
+    density: 0.2
+    minHeight: 0.3
+    maxHeight: 0.8
+    minSteepness: -360
+    maxSteepness: 360
+    heightWeight: 0
+    noiseWeight: 1
+    noiseScale: 0.1
+  - GPUInstancing: 0
+    prefabs:
+    - {fileID: 1159214300760524, guid: e453a1846101506409ee712358e1970a, type: 3}
+    - {fileID: 1425082334868056, guid: 625b33fe0f1b9cb4689755ea6498121d, type: 3}
+    - {fileID: 1265747328178262, guid: 9e109038305bafc4eb9e6e34683f26b4, type: 3}
+    - {fileID: 1788070169085310, guid: 087ad30db7694054f95269924ad2ec8e, type: 3}
+    - {fileID: 1470224856755654, guid: 2974dbfbef1a529408e4ae405f17a0e9, type: 3}
+    - {fileID: 1893189093207436, guid: ceab66c686be31844aee499441e3fbff, type: 3}
+    - {fileID: 1899548555671386, guid: 5f0ef1f2869f4454287c7206a2fa6664, type: 3}
+    - {fileID: 1621676559022128, guid: 6a4efc0c89a213e4aab352527b4c534f, type: 3}
+    - {fileID: 1622438760330528, guid: 114108662a478ea469b68fee0cd38d17, type: 3}
+    - {fileID: 1639350233275620, guid: 447923128e1158e4d907751b770e9cbc, type: 3}
+    - {fileID: 1931450126289736, guid: b298101d1a2e9de4cb61dc326b406578, type: 3}
+    - {fileID: 1786108331535864, guid: 7818b86a15974b542be5d579cc83f5ff, type: 3}
+    - {fileID: 1362467045112932, guid: 644ce14bc1ec6504d813cc60dd75dbde, type: 3}
+    - {fileID: 1083308545452694, guid: 8aec0a32dffcec847b45ba96119b7e02, type: 3}
+    mesh: {fileID: 0}
+    materials: []
+    useRandomScale: 1
+    scale: 1
+    minScale: 0
+    maxScale: 0
+    density: 1
+    minHeight: 0.3
+    maxHeight: 0.7
+    minSteepness: 0
+    maxSteepness: 60
+    heightWeight: 0
+    noiseWeight: 1
+    noiseScale: 0.1
+  - GPUInstancing: 1
+    prefabs: []
+    mesh: {fileID: -7268301800174292951, guid: aabab6120728afa468c9269f10df0e8b, type: 3}
+    materials:
+    - {fileID: 2100000, guid: c879a0d08f45b1e459546431123c8403, type: 2}
+    useRandomScale: 1
+    scale: 100
+    minScale: 0
+    maxScale: 0
+    density: 1
+    minHeight: 0.3
+    maxHeight: 0.8
+    minSteepness: -360
+    maxSteepness: 360
+    heightWeight: 0
+    noiseWeight: 1
+    noiseScale: 0.1
