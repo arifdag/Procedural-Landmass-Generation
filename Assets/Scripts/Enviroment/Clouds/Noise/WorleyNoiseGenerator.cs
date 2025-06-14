@@ -3,6 +3,9 @@ using UnityEngine;
 [ExecuteInEditMode]
 public class WorleyNoiseGenerator : MonoBehaviour
 {
+    public Material targetMaterial;
+    public string targetTextureName = "_CloudNoiseTex3D";
+    
     public ComputeShader worleyComputeShader;
     [Header("Texture Settings")]
     public int resolution = 64;
@@ -113,8 +116,11 @@ public class WorleyNoiseGenerator : MonoBehaviour
             previewMaterial.SetTexture("_NoiseTex", generatedTexture);
         }
 
-        // Example: Make it globally available if needed
-        // Shader.SetGlobalTexture("_WorleyFBMNoise3D", generatedTexture);
+        if (targetMaterial != null && !string.IsNullOrEmpty(targetTextureName))
+        {
+            targetMaterial.SetTexture(targetTextureName, generatedTexture);
+            Debug.Log($"Sent generated texture to material '{targetMaterial.name}' with property name '{targetTextureName}'.");
+        }
     }
 
     public Texture3D CopyRenderTextureToTexture3D(RenderTexture rt)
@@ -172,4 +178,6 @@ public class WorleyNoiseGenerator : MonoBehaviour
             featurePointsBuffer = null;
         }
     }
+    
+    
 }
