@@ -14,7 +14,7 @@ public class WorleyNoiseGenerator : MonoBehaviour
 
 
     [Header("Worley Base Settings")]
-    public int baseCellCount = 8; // Renamed from cellCount for clarity with FBM
+    public int baseCellCount = 8; 
     public float randomSeed = 0f;
 
     [Header("FBM Settings")]
@@ -34,7 +34,7 @@ public class WorleyNoiseGenerator : MonoBehaviour
         if (octaves < 1) octaves = 1;
         if (autoUpdate && Application.isPlaying == false)
         {
-            UnityEditor.EditorApplication.delayCall -= GenerateTexture; // Remove previous if any
+            UnityEditor.EditorApplication.delayCall -= GenerateTexture; 
             UnityEditor.EditorApplication.delayCall += GenerateTexture;
         }
     }
@@ -81,7 +81,7 @@ public class WorleyNoiseGenerator : MonoBehaviour
         {
             generatedTexture.Release();
         }
-        // Use ARGBFloat for RGBA output with high precision
+        // ARGBFloat for RGBA output with high precision
         generatedTexture = new RenderTexture(resolution, resolution, 0, RenderTextureFormat.ARGBFloat);
         generatedTexture.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
         generatedTexture.volumeDepth = resolution;
@@ -90,7 +90,7 @@ public class WorleyNoiseGenerator : MonoBehaviour
         generatedTexture.filterMode = FilterMode.Bilinear; // Or Trilinear
         generatedTexture.Create();
 
-        int kernelHandle = worleyComputeShader.FindKernel("WorleyFBMKernel"); // Updated kernel name
+        int kernelHandle = worleyComputeShader.FindKernel("WorleyFBMKernel");
         if (kernelHandle < 0) {
             Debug.LogError("Kernel 'WorleyFBMKernel' not found in compute shader.");
             ReleaseBuffers(); // Clean up buffer if kernel is missing
@@ -131,8 +131,7 @@ public class WorleyNoiseGenerator : MonoBehaviour
             return null;
         }
 
-        // Ensure Texture3D format matches the RenderTexture format (or is compatible)
-        // ARGBFloat in RenderTexture corresponds to RGBAFloat in Texture3D
+  
         Texture3D tex3D = new Texture3D(rt.width, rt.height, rt.volumeDepth, TextureFormat.RGBAFloat, false);
         tex3D.wrapMode = rt.wrapMode;
         tex3D.filterMode = rt.filterMode;
@@ -158,7 +157,7 @@ public class WorleyNoiseGenerator : MonoBehaviour
         ReleaseBuffers();
         if (generatedTexture != null)
         {
-            // Check if it's safe to release (e.g. not in a build if it's an asset)
+            // Check if it's safe to release
             if (Application.isEditor && !Application.isPlaying)
             {
                 // In editor mode, if it's a temporary RT, it's usually safe.

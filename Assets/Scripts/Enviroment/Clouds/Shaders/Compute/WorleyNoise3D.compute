@@ -1,39 +1,30 @@
-#pragma kernel WorleyFBMKernel // Renamed kernel
+#pragma kernel WorleyFBMKernel 
 
-// Input parameters
-int _Resolution;        // Resolution of the 3D texture
-int3 _BaseCellCount;    // Number of Worley cells for the base frequency (octave 0)
-int _Octaves;           // Number of FBM octaves
-float _Lacunarity;      // Frequency multiplier per octave
-float _Persistence;     // Amplitude multiplier per octave
+
+int _Resolution;        
+int3 _BaseCellCount;    
+int _Octaves;           
+float _Lacunarity;      
+float _Persistence;     
 
 // Buffer containing pre-calculated random feature points for each cell of the base grid
 StructuredBuffer<float3> _FeaturePointsBuffer;
 
-// Output 3D texture (now RGBA)
+// Output 3D texture
 RWTexture3D<float4> _ResultTexture;
 
-// Worley F1 Noise function
+
 // Calculates F1 Worley noise (distance to closest point) for a given sample point.
-// - sample_p: The 3D coordinate to sample noise at. Can be outside [0,1] due to FBM frequency scaling.
-// - cell_count_for_points: The density of feature points in the _FeaturePointsBuffer.
-// - pointsBuffer: The buffer of feature point offsets.
 float CalculateWorleyF1(float3 sample_p, int3 cell_count_for_points, StructuredBuffer<float3> pointsBuffer)
 {
     // Determine which cell this point is in, relative to the density of points in pointsBuffer.
-    // sample_p is effectively in a coordinate system that has been tiled/scaled by FBM frequency.
-    // The feature points in pointsBuffer define a grid based on cell_count_for_points.
-    // We use cell_count_for_points to determine how sample_p maps to this grid.
     int3 current_cell_scaled = int3(floor(sample_p * cell_count_for_points));
 
     float min_dist_sq_f1 = 1000000.0;
-
-    // Iterate over the current cell and its 26 neighbors
+    
     for (int z_offset = -1; z_offset <= 1; ++z_offset) {
         for (int y_offset = -1; y_offset <= 1; ++y_offset) {
             for (int x_offset = -1; x_offset <= 1; ++x_offset) {
-                // This is the absolute cell index in the (potentially large) conceptual grid
-                // defined by sample_p * cell_count_for_points
                 int3 neighbor_cell_absolute = current_cell_scaled + int3(x_offset, y_offset, z_offset);
 
                 // Wrap neighbor_cell_absolute to get an index into the _FeaturePointsBuffer,
@@ -89,7 +80,6 @@ void WorleyFBMKernel (uint3 id : SV_DispatchThreadID)
         float3 sample_p = p_tex * frequency;
 
         // Calculate Worley F1 noise for this octave
-        // _BaseCellCount defines the density of points in _FeaturePointsBuffer
         float worleyF1 = CalculateWorleyF1(sample_p, _BaseCellCount, _FeaturePointsBuffer);
 
         totalWorleyValue += worleyF1 * amplitude;
@@ -106,8 +96,8 @@ void WorleyFBMKernel (uint3 id : SV_DispatchThreadID)
         finalNoiseValue = totalWorleyValue / maxAmplitudeSum;
     }
 
-    // Optional: Invert for common cloud appearance (darker means denser)
-    // finalNoiseValue = 1.0 - finalNoiseValue;
+    
+    finalNoiseValue = 1.0 - finalNoiseValue;
 
     // Store the grayscale FBM result in R, G, and B channels. Alpha is 1.
     _ResultTexture[id] = float4(finalNoiseValue, finalNoiseValue, finalNoiseValue, 1.0);
